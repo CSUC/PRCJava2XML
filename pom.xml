@@ -32,7 +32,7 @@
         <javatuples.version>1.2</javatuples.version>
         <typesafe.config.version>1.4.0</typesafe.config.version>
         <log4j.version>2.13.0</log4j.version>
-        <args4j.version>2.33</args4j.version>
+        <picocli.version>4.1.4</picocli.version>
         <super.csv.version>2.4.0</super.csv.version>
 
         <prc.java.xml.logs>/tmp/prc</prc.java.xml.logs>
@@ -95,11 +95,11 @@
                 <version>${typesafe.config.version}</version>
             </dependency>
 
-            <!-- https://mvnrepository.com/artifact/args4j/args4j -->
+            <!-- https://mvnrepository.com/artifact/info.picocli/picocli -->
             <dependency>
-                <groupId>args4j</groupId>
-                <artifactId>args4j</artifactId>
-                <version>${args4j.version}</version>
+                <groupId>info.picocli</groupId>
+                <artifactId>picocli</artifactId>
+                <version>${picocli.version}</version>
             </dependency>
 
             <dependency>

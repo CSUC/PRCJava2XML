@@ -1,5 +1,6 @@
 package org.csuc.cli;
 
+
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -10,93 +11,179 @@ import org.csuc.poi.XLSX2CSV;
 import org.csuc.serialize.JaxbMarshal;
 import org.csuc.typesafe.semantics.ClassId;
 import org.csuc.typesafe.semantics.Semantics;
-import org.kohsuke.args4j.CmdLineException;
-import org.kohsuke.args4j.CmdLineParser;
 import org.supercsv.prefs.CsvPreference;
-import xmlns.org.eurocris.cerif_1.*;
+import picocli.CommandLine;
+import xmlns.org.eurocris.cerif_1.CfPersType;
 
 import javax.xml.datatype.DatatypeFactory;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 
 /**
+ *
  * @author amartinez
  */
-public class App {
+@CommandLine.Command(
+        name = "prc-cerif",
+        mixinStandardHelpOptions = true,
+        version = {"PRC-CSV2XML 0.0.1", "CSUC | (c) 2019"},
+        usageHelpAutoWidth = true,
+        headerHeading = "Usage:%n%n",
+        synopsisHeading = "%n",
+        descriptionHeading = "%nDescription:%n%n",
+        parameterListHeading = "%nParameters:%n",
+        optionListHeading = "%nOptions:%n",
+        header = "Excel to CERIF"
+)
+public class App implements Runnable {
 
-    private static Logger logger = LogManager.getLogger("PRC-CSV2XML");
+    private Logger logger = LogManager.getLogger();
 
-    private static ArgsBean bean;
+    @CommandLine.Spec CommandLine.Model.CommandSpec spec;
 
-    public static void main(String[] args) {
-        new App().doMain(args);
+    @CommandLine.ArgGroup(exclusive = false, multiplicity = "1")
+    private Composite composite;
+
+    @CommandLine.Parameters(hidden = true)
+    private List<String> allParameters;
+
+    static class Composite {
+        @CommandLine.ArgGroup(order = 1, heading = "Input options:%n", multiplicity = "1")
+        Input input = new Input();
+
+        @CommandLine.ArgGroup(order = 2, heading = "CSV options:%n")
+        CSV csv = new CSV();
+
+        @CommandLine.ArgGroup(order = 3, heading = "CERIF options:%n", multiplicity = "1")
+        CERIF cerif = new CERIF();
     }
 
-    private void doMain(String[] args) {
-        bean = new ArgsBean(args);
-        CmdLineParser parser = new CmdLineParser(bean);
-        try {
-            // parse the arguments.
-            parser.parseArgument(args);
-        } catch (CmdLineException e) {
-            System.exit(1);
-        }
+    static class Input {
+        @CommandLine.Option(names = {"-i", "--input"}, required = true, description = "input file", paramLabel = "<PATH>")
+        private Path input;
 
+        @CommandLine.Option(
+                names = {"-c", "--charset"},
+                description = "charset file. Option with optional parameter. (Default: ${DEFAULT-VALUE})%n" +
+                        "Candidates: ${COMPLETION-CANDIDATES}",
+                paramLabel = "<CHARSET>",
+                defaultValue = "UTF-8",
+                completionCandidates = StandardCharsetsCandidates.class)
+        private String charset = StandardCharsets.UTF_8.name();
+    }
+
+    static class CSV {
+        @CommandLine.Option(
+                names = {"-d", "--delimiter"},
+                description = "delimiter",
+                paramLabel = "<CHAR>",
+                defaultValue = ";")
+        private char delimiter = ';';
+
+        @CommandLine.Option(
+                names = {"-e", "--endOfLine"},
+                description = "endOfLineSymbols",
+                paramLabel = "<String>",
+                defaultValue = "\n")
+        private String endOfLineSymbols = "\n";
+
+        @CommandLine.Option(
+                names = {"--deleteOnExit"},
+                description = "deleteOnExit",
+                paramLabel = "<BOOLEAN>",
+                defaultValue = "false")
+        private Boolean deleteOnExit = false;
+
+        private Path researcher;
+        private Path department;
+        private Path relationDepartment;
+        private Path researcherGroup;
+        private Path relationResearcherGroup;
+        private Path project;
+        private Path relationProject;
+        private Path publication;
+        private Path relationPublication;
+    }
+
+    static class CERIF {
+        @CommandLine.Option(
+                names = {"-o", "--out"},
+                description = "out",
+                paramLabel = "<PATH>",
+                defaultValue = "/tmp/example.xml")
+        private Path out = Paths.get("/tmp/example.xml");
+
+        @CommandLine.Option(
+                names = {"-f", "--formatted"},
+                description = "formatted",
+                paramLabel = "<BOOLEAN>",
+                defaultValue = "false")
+        private Boolean formatted = false;
+
+        @CommandLine.Option(
+                names = {"-r", "--ruct"},
+                description = "ruct (https://www.educacion.gob.es/ruct/home)",
+                paramLabel = "<String>",
+                required = true)
+        private String ruct;
+    }
+
+
+    public void run() {
         XLSX2CSV xlsx2CSV = null;
         try {
-            xlsx2CSV = new XLSX2CSV(bean.getInput().toFile(), bean.getDelimiter(), bean.getEndOfLineSymbols());
+            xlsx2CSV = new XLSX2CSV(composite.input.input.toFile(), composite.csv.delimiter, composite.csv.endOfLineSymbols);
             xlsx2CSV.execute();
 
             xlsx2CSV.getFiles().forEach((key, value) -> {
-                try {
-                    switch (key) {
-                        case researchers:
-                            bean.setResearcher(value.toPath());
-                            break;
-                        case departments:
-                            bean.setDepartment(value.toPath());
-                            break;
-                        case departments_relations:
-                            bean.setRelationDepartment(value.toPath());
-                            break;
-                        case research_groups:
-                            bean.setResearcherGroup(value.toPath());
-                            break;
-                        case research_groups_relations:
-                            bean.setRelationResearcherGroup(value.toPath());
-                            break;
-                        case projects:
-                            bean.setProject(value.toPath());
-                            break;
-                        case projects_relations:
-                            bean.setRelationProject(value.toPath());
-                            break;
-                        case publications:
-                            bean.setPublication(value.toPath());
-                            break;
-                        case publication_relations:
-                            bean.setRelationPublication(value.toPath());
-                            break;
-                    }
-                } catch (FileNotFoundException e) {
-                    logger.error(e);
+                switch (key) {
+                    case researchers:
+                        composite.csv.researcher = value.toPath();
+                        break;
+                    case departments:
+                        composite.csv.department = value.toPath();
+                        break;
+                    case departments_relations:
+                        composite.csv.relationDepartment = value.toPath();
+                        break;
+                    case research_groups:
+                        composite.csv.researcherGroup = value.toPath();
+                        break;
+                    case research_groups_relations:
+                        composite.csv.relationResearcherGroup = value.toPath();
+                        break;
+                    case projects:
+                        composite.csv.project = value.toPath();
+                        break;
+                    case projects_relations:
+                        composite.csv.relationProject = value.toPath();
+                        break;
+                    case publications:
+                        composite.csv.publication = value.toPath();
+                        break;
+                    case publication_relations:
+                        composite.csv.relationPublication = value.toPath();
+                        break;
                 }
             });
 
-            CERIF cerif = new CERIF();
+            xmlns.org.eurocris.cerif_1.CERIF cerif = new xmlns.org.eurocris.cerif_1.CERIF();
 
             GregorianCalendar gregory = new GregorianCalendar();
             gregory.setTime(new Date());
             cerif.setDate(DatatypeFactory.newInstance().newXMLGregorianCalendar(gregory));
-            cerif.setSourceDatabase(bean.getRuct());
+            cerif.setSourceDatabase(composite.cerif.ruct);
 
             List<CfPersType> cfPersTypeList = new ArrayList<>();
 
             //Researchers
-            logger.info("{}", bean.getResearcher());
-            CSVResearcher csvResearcher = new CSVResearcher(bean.getResearcher(),
-                    (new CsvPreference.Builder('"', bean.getDelimiter(), bean.getEndOfLineSymbols())).build());
+            logger.info("{}", composite.csv.researcher);
+            CSVResearcher csvResearcher = new CSVResearcher(composite.csv.researcher.toString(),
+                    (new CsvPreference.Builder('"', composite.csv.delimiter, composite.csv.endOfLineSymbols)).build());
             if(Objects.isNull(csvResearcher.readCSV()))   throw new Exception("Researchers not content!");
 
             csvResearcher.readCSV().forEach(researcher -> {
@@ -109,10 +196,10 @@ public class App {
             });
 
             //OrgUnits (Department)
-            logger.info("{} - {}", bean.getDepartment(), bean.getRelationDepartment());
-            CSVDepartment csvDepartment = new CSVDepartment(bean.getDepartment(),
-                    bean.getRelationDepartment(),
-                    (new CsvPreference.Builder('"', bean.getDelimiter(), bean.getEndOfLineSymbols())).build());
+            logger.info("{} - {}", composite.csv.department.toString(), composite.csv.relationDepartment.toString());
+            CSVDepartment csvDepartment = new CSVDepartment(composite.csv.department.toString(),
+                    composite.csv.relationDepartment.toString(),
+                    (new CsvPreference.Builder('"', composite.csv.delimiter, composite.csv.endOfLineSymbols)).build());
 
             Optional.ofNullable(csvDepartment.readCSV()).ifPresent(present-> present.forEach(department -> {
                 MarshalDepartment marshalDepartment =
@@ -131,10 +218,10 @@ public class App {
             }));
 
             //OrgUnits (Research Group)
-            logger.info("{} - {}", bean.getResearcherGroup(), bean.getRelationResearcherGroup());
-            CSVResearchGroup csvResearchGroup = new CSVResearchGroup(bean.getResearcherGroup(),
-                    bean.getRelationResearcherGroup(),
-                    (new CsvPreference.Builder('"', bean.getDelimiter(), bean.getEndOfLineSymbols())).build());
+            logger.info("{} - {}", composite.csv.researcherGroup.toString(), composite.csv.relationResearcherGroup.toString());
+            CSVResearchGroup csvResearchGroup = new CSVResearchGroup(composite.csv.researcherGroup.toString(),
+                    composite.csv.relationResearcherGroup.toString(),
+                    (new CsvPreference.Builder('"', composite.csv.delimiter, composite.csv.endOfLineSymbols)).build());
 
             Optional.ofNullable(csvResearchGroup.readCSV()).ifPresent(present-> present.forEach(group -> {
                 MarshalResearchGroup marshalResearchGroup = new MarshalResearchGroup(
@@ -154,9 +241,9 @@ public class App {
 
 
             //Projects
-            logger.info("{} - {}", bean.getProject(), bean.getRelationProject());
-            CSVProject csvProject = new CSVProject(bean.getProject(), bean.getRelationProject(),
-                    (new CsvPreference.Builder('"', bean.getDelimiter(), bean.getEndOfLineSymbols())).build());
+            logger.info("{} - {}", composite.csv.project.toString(), composite.csv.relationProject.toString());
+            CSVProject csvProject = new CSVProject(composite.csv.project.toString(), composite.csv.relationProject.toString(),
+                    (new CsvPreference.Builder('"', composite.csv.delimiter, composite.csv.endOfLineSymbols)).build());
             Optional.ofNullable(csvProject.readCSV()).ifPresent(present-> present.forEach(project -> {
                 MarshalProject marshalProject = new MarshalProject(
                         new NameOrTitle((String) project.get(0), null, null),
@@ -174,9 +261,9 @@ public class App {
             }));
 
             //Publications
-            logger.info("{} - {}", bean.getPublication(), bean.getRelationPublication());
-            CSVPublication csvPublication = new CSVPublication(bean.getPublication(), bean.getRelationPublication(),
-                    (new CsvPreference.Builder('"', bean.getDelimiter(), bean.getEndOfLineSymbols())).build());
+            logger.info("{} - {}", composite.csv.publication.toString(), composite.csv.relationPublication.toString());
+            CSVPublication csvPublication = new CSVPublication(composite.csv.publication.toString(), composite.csv.relationPublication.toString(),
+                    (new CsvPreference.Builder('"', composite.csv.delimiter, composite.csv.endOfLineSymbols)).build());
 
             Optional.ofNullable(csvPublication.readCSV()).ifPresent(present-> present.forEach(publication -> {
                 MarshalPublication marshalPublication = new MarshalPublication(
@@ -204,17 +291,36 @@ public class App {
 
             cerif.getCfClassOrCfClassSchemeOrCfClassSchemeDescr().addAll(cfPersTypeList);
 
-            JaxbMarshal jxb = new JaxbMarshal(cerif, CERIF.class);
-            if (Objects.nonNull(bean.getOutput()))
-                jxb.marshaller(new FileOutputStream(bean.getOutput().toFile()), bean.getCharset(), bean.getFormatted(), false);
+            JaxbMarshal jxb = new JaxbMarshal(cerif, xmlns.org.eurocris.cerif_1.CERIF.class);
+            if (Objects.nonNull(composite.cerif.out))
+                jxb.marshaller(new FileOutputStream(composite.cerif.out.toFile()), Charset.forName(composite.input.charset), composite.cerif.formatted, false);
             else
-                jxb.marshaller(IoBuilder.forLogger(App.class).setLevel(Level.INFO).buildOutputStream(), bean.getCharset(), bean.getFormatted(), false);
+                jxb.marshaller(IoBuilder.forLogger(App.class).setLevel(Level.INFO).buildOutputStream(), Charset.forName(composite.input.charset), composite.cerif.formatted, false);
 
-            logger.info("Done");
+            logger.info("Done - {}", composite.cerif.out);
         } catch (Exception e) {
             logger.error(e);
         }finally {
-            if(bean.isDeleteOnExit())   xlsx2CSV.deleteOnExit();
+            if(composite.csv.deleteOnExit)   xlsx2CSV.deleteOnExit();
+        }
+    }
+
+    public static void main(String[] args) {
+        CommandLine cmd = new CommandLine(new App());
+        if (args.length == 0)   cmd.usage(System.out);
+        else cmd.execute(args);
+    }
+
+    static class StandardCharsetsCandidates extends ArrayList<String> {
+        StandardCharsetsCandidates() {
+            super(Arrays.asList(
+                    StandardCharsets.ISO_8859_1.name(),
+                    StandardCharsets.US_ASCII.name(),
+                    StandardCharsets.UTF_8.name(),
+                    StandardCharsets.UTF_16.name(),
+                    StandardCharsets.UTF_16BE.name(),
+                    StandardCharsets.UTF_16LE.name()
+            ));
         }
     }
 }
