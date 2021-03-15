@@ -31,7 +31,7 @@
         <commons.text.version>1.8</commons.text.version>
         <javatuples.version>1.2</javatuples.version>
         <typesafe.config.version>1.4.0</typesafe.config.version>
-        <log4j.version>2.13.0</log4j.version>
+        <log4j.version>2.14.1</log4j.version>
         <args4j.version>2.33</args4j.version>
         <super.csv.version>2.4.0</super.csv.version>
 
